@@ -2,6 +2,8 @@ package com.ecommerce;
 
 import io.github.bonigarcia.wdm.WebDriverManager;
 import utils.ConfigReader;
+
+import org.openqa.selenium.Dimension;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
@@ -27,7 +29,11 @@ public class BaseTest {
         }
 
         driver = new ChromeDriver(options);
-        driver.manage().window().maximize();
+        if (System.getenv("CI") != null) {
+            driver.manage().window().setSize(new Dimension(1920, 1080));
+        } else {
+            driver.manage().window().maximize();
+        }
         driver.get(ConfigReader.getBaseURL());
     }
 
