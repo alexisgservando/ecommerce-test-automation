@@ -14,59 +14,68 @@ import org.testng.annotations.BeforeClass;
 import java.time.Duration;
 
 public class BaseTest {
-    protected WebDriver driver;
+	protected WebDriver driver;
 
-    @BeforeClass
-    public void setUp() {
-        WebDriverManager.chromedriver().setup();
+	@BeforeClass
+	public void setUp() throws java.io.IOException {
+		WebDriverManager.chromedriver().setup();
 
-        ChromeOptions options = new ChromeOptions();
-        
-        // Common options for stability
-        options.addArguments("--disable-blink-features=AutomationControlled");
-        options.addArguments("--disable-extensions");
-        options.addArguments("--disable-plugins");
-        options.addArguments("--disable-images");
-        options.addArguments("--disable-javascript");
-        options.setExperimentalOption("excludeSwitches", new String[]{"enable-automation"});
-        options.setExperimentalOption("useAutomationExtension", false);
+		ChromeOptions options = new ChromeOptions();
 
-        // Always run headless in CI
-        if (System.getenv("CI") != null) {
-            options.addArguments("--headless=new");
-            options.addArguments("--no-sandbox");
-            options.addArguments("--disable-dev-shm-usage");
-            options.addArguments("--remote-allow-origins=*");
-            options.addArguments("--window-size=1920,1080");
-            options.addArguments("--disable-gpu");
-            options.addArguments("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36");
-        }
+		// Common options
+		options.addArguments("--disable-blink-features=AutomationControlled");
+		options.addArguments("--disable-extensions");
+		options.setExperimentalOption("excludeSwitches", new String[] { "enable-automation" });
+		options.setExperimentalOption("useAutomationExtension", false);
 
-        driver = new ChromeDriver(options);
-        driver.manage().window().setSize(new Dimension(1920, 1080));
-        driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(30));
-        driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(10));
-        
-        // Navigate and wait for page to load properly
-        driver.get(ConfigReader.getBaseURL());
-        
-        // Wait for the page to fully load and bypass any loading screens
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
-        try {
-            // Wait until title is NOT "Just a moment..." 
-            wait.until(ExpectedConditions.not(ExpectedConditions.titleContains("Just a moment")));
-            // Additional wait for page stability
-            Thread.sleep(2000);
-        } catch (Exception e) {
-            System.out.println("Page load warning: " + e.getMessage());
-            // Continue anyway - sometimes the site loads despite timeouts
-        }
-    }
+		// Detect CI environments (Jenkins and GitHub Actions)
+		var env = System.getenv();
+		boolean isCI = env.containsKey("JENKINS_URL") || "true".equalsIgnoreCase(env.get("GITHUB_ACTIONS"))
+				|| "true".equalsIgnoreCase(env.get("CI")); // keep your original guard too
 
-    @AfterClass
-    public void tearDown() {
-        if (driver != null) {
-            driver.quit();
-        }
-    }
+		if (isCI) {
+			// Use a unique, disposable profile to avoid "user data directory is already in
+			// use"
+			String tag = env.getOrDefault("BUILD_TAG",
+					env.getOrDefault("GITHUB_RUN_ID", java.util.UUID.randomUUID().toString()));
+			String baseTmp = env.getOrDefault("RUNNER_TEMP", System.getProperty("java.io.tmpdir"));
+			java.nio.file.Path profileDir = java.nio.file.Paths.get(baseTmp, "chrome-profile-" + tag);
+			java.nio.file.Files.createDirectories(profileDir);
+			options.addArguments("--user-data-dir=" + profileDir.toString());
+
+			// CI-friendly flags
+			options.addArguments("--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
+					"--remote-allow-origins=*", "--window-size=1920,1080", "--disable-gpu");
+			// (Optional) you can keep your custom UA if needed, but not required
+			// options.addArguments("--user-agent=Mozilla/5.0 ...");
+		} else {
+			// Local dev
+			options.addArguments("--start-maximized");
+			// Avoid disabling images/JS locally—they can break sites under test
+			// Remove these two if you added them earlier:
+			// --disable-images, --disable-javascript
+		}
+
+		driver = new ChromeDriver(options);
+		driver.manage().window().setSize(new Dimension(1920, 1080));
+		driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(30));
+		driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(10));
+
+		driver.get(ConfigReader.getBaseURL());
+
+		WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
+		try {
+			wait.until(ExpectedConditions.not(ExpectedConditions.titleContains("Just a moment")));
+			Thread.sleep(2000);
+		} catch (Exception e) {
+			System.out.println("Page load warning: " + e.getMessage());
+		}
+	}
+
+	@AfterClass
+	public void tearDown() {
+		if (driver != null) {
+			driver.quit();
+		}
+	}
 }
