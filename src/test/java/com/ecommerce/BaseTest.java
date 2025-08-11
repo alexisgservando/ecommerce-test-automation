@@ -45,15 +45,14 @@ public class BaseTest {
 				|| "true".equalsIgnoreCase(env.get("CI"));
 
 		if (isCI) {
-			// Put the Chrome profile INSIDE the Jenkins workspace, and make it unique per
-			// build.
 			String workspace = env.getOrDefault("WORKSPACE", System.getProperty("java.io.tmpdir"));
-			String tag = env.getOrDefault("BUILD_NUMBER", UUID.randomUUID().toString());
-			Path profileDir = Paths.get(workspace, "chrome-profile-" + tag);
-			Files.createDirectories(profileDir);
+			// BUILD_TAG is unique per build, e.g. jenkins-ecommerce-test-automation-#11
+			String tag = env.getOrDefault("BUILD_TAG",
+					env.getOrDefault("BUILD_NUMBER", java.util.UUID.randomUUID().toString()));
+			java.nio.file.Path profileDir = java.nio.file.Paths.get(workspace, "chrome-profile-" + tag);
+			java.nio.file.Files.createDirectories(profileDir);
+			System.out.println("Using CI Chrome profile: " + profileDir); // <-- shows up in Jenkins console
 			options.addArguments("--user-data-dir=" + profileDir.toString());
-
-			// A few extras help on Windows CI
 			options.addArguments("--no-first-run", "--no-default-browser-check");
 
 			options.addArguments("--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
