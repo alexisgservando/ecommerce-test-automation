@@ -3,78 +3,116 @@ package com.ecommerce;
 import io.github.bonigarcia.wdm.WebDriverManager;
 import utils.ConfigReader;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.Duration;
+import java.util.Map;
+import java.util.UUID;
+
 import org.openqa.selenium.Dimension;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
-import org.openqa.selenium.support.ui.WebDriverWait;
-import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
-import java.time.Duration;
+import org.openqa.selenium.support.ui.WebDriverWait;
 
 public class BaseTest {
-	protected WebDriver driver;
+    protected WebDriver driver;
 
-	@BeforeClass
-	public void setUp() throws java.io.IOException {
-		WebDriverManager.chromedriver().setup();
+    @BeforeClass
+    public void setUp() throws IOException, InterruptedException {
+        WebDriverManager.chromedriver().setup();
 
-		ChromeOptions options = new ChromeOptions();
+        ChromeOptions options = new ChromeOptions();
 
-		// Good, stable defaults
-		options.addArguments("--disable-blink-features=AutomationControlled");
-		options.addArguments("--disable-extensions");
-		options.setExperimentalOption("excludeSwitches", new String[] { "enable-automation" });
-		options.setExperimentalOption("useAutomationExtension", false);
+        // Stable defaults
+        options.addArguments("--disable-blink-features=AutomationControlled");
+        options.addArguments("--disable-extensions");
+        options.setExperimentalOption("excludeSwitches", new String[] { "enable-automation" });
+        options.setExperimentalOption("useAutomationExtension", false);
+        options.addArguments("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+        options.addArguments("--lang=en-US,en");
 
-		// Detect CI (Jenkins or GitHub Actions)
-		var env = System.getenv();
-		boolean isCI = env.containsKey("JENKINS_URL") || "true".equalsIgnoreCase(env.get("GITHUB_ACTIONS"))
-				|| "true".equalsIgnoreCase(env.get("CI"));
+        // Detect CI (Jenkins, GitHub Actions, or generic CI)
+        Map<String, String> env = System.getenv();
+        boolean isCI = env.containsKey("JENKINS_URL")
+                || "true".equalsIgnoreCase(env.get("GITHUB_ACTIONS"))
+                || "true".equalsIgnoreCase(env.get("CI"));
 
-		if (isCI) {
-			// Unique, disposable user-data-dir to avoid "already in use"
-			String tag = env.getOrDefault("BUILD_TAG",
-					env.getOrDefault("GITHUB_RUN_ID", java.util.UUID.randomUUID().toString()));
-			String baseTmp = env.getOrDefault("RUNNER_TEMP", System.getProperty("java.io.tmpdir"));
-			java.nio.file.Path profileDir = java.nio.file.Paths.get(baseTmp, "chrome-profile-" + tag);
-			java.nio.file.Files.createDirectories(profileDir);
-			options.addArguments("--user-data-dir=" + profileDir);
+        if (isCI) {
+            // Fresh, disposable profile every run -> no lock conflicts
+            String baseTmp = env.getOrDefault("RUNNER_TEMP", System.getProperty("java.io.tmpdir"));
+            String tag = UUID.randomUUID().toString();
+            Path profileDir = Paths.get(baseTmp, "chrome-profile-" + tag);
+            Files.createDirectories(profileDir);
+            options.addArguments("--user-data-dir=" + profileDir);
 
-			// Headless CI-friendly flags
-			options.addArguments("--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
-					"--remote-allow-origins=*", "--window-size=1920,1080", "--disable-gpu");
-			// Optional: realistic UA if you keep it
-			// options.addArguments("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64)
-			// AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-		} else {
-			// Local dev: open normal window; no special profile
-			options.addArguments("--start-maximized");
-		}
+            // CI-friendly flags
+            options.addArguments(
+                    "--headless=new",
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--remote-allow-origins=*",
+                    "--window-size=1920,1080",
+                    "--disable-gpu"
+            );
+        } else {
+            // Local dev
+            options.addArguments("--start-maximized");
+        }
 
-		driver = new ChromeDriver(options);
-		driver.manage().window().setSize(new Dimension(1920, 1080));
-		driver.manage().timeouts().pageLoadTimeout(java.time.Duration.ofSeconds(30));
-		driver.manage().timeouts().implicitlyWait(java.time.Duration.ofSeconds(10));
+        driver = new ChromeDriver(options);
+        driver.manage().window().setSize(new Dimension(1920, 1080));
+        driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(isCI ? 60 : 30));
+        driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(10));
 
-		driver.get(ConfigReader.getBaseURL());
+        driver.get(ConfigReader.getBaseURL());
 
-		var wait = new org.openqa.selenium.support.ui.WebDriverWait(driver, java.time.Duration.ofSeconds(30));
-		try {
-			// Let Cloudflare finish
-			wait.until(org.openqa.selenium.support.ui.ExpectedConditions
-					.not(org.openqa.selenium.support.ui.ExpectedConditions.titleContains("Just a moment")));
-			Thread.sleep(2000);
-		} catch (Exception e) {
-			System.out.println("Page load warning: " + e.getMessage());
-		}
-	}
+        // Resilient wait for Cloudflare interstitial + DOM readiness
+        int waitSeconds = isCI ? 90 : 30;
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(waitSeconds));
+        try {
+            // Wait until title is not "Just a moment..."
+            wait.until(d -> {
+                String title = driver.getTitle();
+                return title != null && !title.contains("Just a moment");
+            });
 
-	@AfterClass
-	public void tearDown() {
-		if (driver != null) {
-			driver.quit();
-		}
-	}
+            // Wait for document.readyState === "complete"
+            long end = System.currentTimeMillis() + (waitSeconds * 1000L);
+            while (System.currentTimeMillis() < end) {
+                String ready = (String) ((JavascriptExecutor) driver).executeScript("return document.readyState");
+                if ("complete".equals(ready)) break;
+                Thread.sleep(500);
+            }
+
+            // One gentle refresh if still not complete
+            String ready = (String) ((JavascriptExecutor) driver).executeScript("return document.readyState");
+            if (!"complete".equals(ready)) {
+                driver.navigate().refresh();
+                long end2 = System.currentTimeMillis() + 30_000L;
+                while (System.currentTimeMillis() < end2) {
+                    ready = (String) ((JavascriptExecutor) driver).executeScript("return document.readyState");
+                    if ("complete".equals(ready)) break;
+                    Thread.sleep(500);
+                }
+            }
+
+            Thread.sleep(1000); // small settle time
+        } catch (Exception e) {
+            System.out.println("Page load warning: " + e.getMessage());
+        }
+    }
+
+    @AfterClass(alwaysRun = true)
+    public void tearDown() {
+        if (driver != null) {
+            driver.quit();
+        }
+    }
 }
