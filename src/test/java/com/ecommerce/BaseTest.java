@@ -40,21 +40,26 @@ public class BaseTest {
 
 		// Detect CI (Jenkins, GitHub Actions, or generic CI)
 		Map<String, String> env = System.getenv();
-		boolean isCI = env.containsKey("JENKINS_URL") 
-				|| "true".equalsIgnoreCase(env.get("GITHUB_ACTIONS"))
+		boolean isCI = env.containsKey("JENKINS_URL") || "true".equalsIgnoreCase(env.get("GITHUB_ACTIONS"))
 				|| "true".equalsIgnoreCase(env.get("CI"));
 
 		if (isCI) {
-			String workspace = env.getOrDefault("WORKSPACE", System.getProperty("java.io.tmpdir"));
-			// BUILD_TAG is unique per build, e.g. jenkins-ecommerce-test-automation-#11
-			String tag = env.getOrDefault("BUILD_TAG",
-					env.getOrDefault("BUILD_NUMBER", java.util.UUID.randomUUID().toString()));
-			java.nio.file.Path profileDir = java.nio.file.Paths.get(workspace, "chrome-profile-" + tag);
-			java.nio.file.Files.createDirectories(profileDir);
-			System.out.println("Using CI Chrome profile: " + profileDir); // <-- shows up in Jenkins console
-			options.addArguments("--user-data-dir=" + profileDir.toString());
-			options.addArguments("--no-first-run", "--no-default-browser-check");
+			// Only use custom user data directory for GitHub Actions, not Jenkins
+			boolean isGitHubActions = "true".equalsIgnoreCase(env.get("GITHUB_ACTIONS"));
 
+			if (isGitHubActions) {
+				String workspace = env.getOrDefault("WORKSPACE", System.getProperty("java.io.tmpdir"));
+				String tag = env.getOrDefault("BUILD_TAG",
+						env.getOrDefault("BUILD_NUMBER", java.util.UUID.randomUUID().toString()));
+				java.nio.file.Path profileDir = java.nio.file.Paths.get(workspace, "chrome-profile-" + tag);
+				java.nio.file.Files.createDirectories(profileDir);
+				System.out.println("Using CI Chrome profile: " + profileDir);
+				options.addArguments("--user-data-dir=" + profileDir.toString());
+			} else {
+				System.out.println("Jenkins detected - using default Chrome profile location");
+			}
+
+			options.addArguments("--no-first-run", "--no-default-browser-check");
 			options.addArguments("--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
 					"--remote-allow-origins=*", "--window-size=1920,1080", "--disable-gpu");
 		} else {
