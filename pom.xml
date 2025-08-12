@@ -8,10 +8,8 @@
 	<artifactId>ecommerce-test-automation</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 
-	<!-- Centralize versions -->
 	<properties>
-		<maven.compiler.release>21</maven.compiler.release>  <!-- matches Jenkins
-		JDK21 -->
+		<maven.compiler.release>21</maven.compiler.release>
 		<selenium.version>4.20.0</selenium.version>
 		<testng.version>7.8.0</testng.version>
 		<webdrivermanager.version>5.8.0</webdrivermanager.version>
@@ -21,22 +19,12 @@
 	</properties>
 
 	<dependencies>
-		<!-- Selenium -->
 		<dependency>
 			<groupId>org.seleniumhq.selenium</groupId>
 			<artifactId>selenium-java</artifactId>
 			<version>${selenium.version}</version>
 		</dependency>
 
-		<!-- (Optional) DevTools binding to quiet CDP warnings for Chrome 139 -->
-		<dependency>
-			<groupId>org.seleniumhq.selenium</groupId>
-			<artifactId>selenium-devtools-v139</artifactId>
-			<version>${selenium.version}</version>
-			<optional>true</optional>
-		</dependency>
-
-		<!-- TestNG -->
 		<dependency>
 			<groupId>org.testng</groupId>
 			<artifactId>testng</artifactId>
@@ -44,14 +32,12 @@
 			<scope>test</scope>
 		</dependency>
 
-		<!-- WebDriverManager -->
 		<dependency>
 			<groupId>io.github.bonigarcia</groupId>
 			<artifactId>webdrivermanager</artifactId>
 			<version>${webdrivermanager.version}</version>
 		</dependency>
 
-		<!-- Simple logger for println-style output -->
 		<dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>slf4j-simple</artifactId>
@@ -61,7 +47,6 @@
 
 	<build>
 		<plugins>
-			<!-- Compile for Java 21 -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
@@ -71,21 +56,15 @@
 				</configuration>
 			</plugin>
 
-			<!-- Surefire + TestNG (single, consolidated config) -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>${surefire.version}</version>
 				<configuration>
-					<!-- Stream test output to the console so you see your
-					prints in Jenkins & Actions -->
 					<useFile>false</useFile>
 					<redirectTestOutputToFile>false</redirectTestOutputToFile>
 					<printSummary>true</printSummary>
 					<trimStackTrace>false</trimStackTrace>
-
-					<!-- Point to your TestNG suite (keeps Maven and IDE
-					consistent) -->
 					<suiteXmlFiles>
 						<suiteXmlFile>src/test/resources/testng.xml</suiteXmlFile>
 					</suiteXmlFiles>
