@@ -2,7 +2,7 @@ pipeline {
   agent any
 
   tools {
-    jdk 'JDK21'
+    jdk   'JDK21'
     maven 'Maven 3.9'
   }
 
@@ -13,34 +13,42 @@ pipeline {
 
   environment {
     MAVEN_OPTS = '-Dmaven.test.failure.ignore=false'
-    // optional: cache WebDriverManager downloads to speed up builds
-    // WDM_CACHE_PATH = 'C:\\jenkins\\cache\\wdm'
-    // CHROME_BIN is already set globally; if not, uncomment next line
+    // If you set this globally you can remove it here:
     // CHROME_BIN = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+    // Optional: cache WebDriverManager downloads to speed up builds
+    // WDM_CACHE_PATH = 'C:\\jenkins\\cache\\wdm'
   }
 
   stages {
     stage('Checkout') {
-      steps { checkout scm }
+      steps {
+        checkout scm
+      }
     }
 
     stage('Build') {
-      steps { bat 'mvn -B -U -DskipTests compile' }
+      options { timeout(time: 10, unit: 'MINUTES') }
+      steps {
+        bat 'mvn -B -U -DskipTests compile'
+      }
     }
 
     stage('Test') {
-      steps { bat 'mvn -B -U clean test' }
+      options { timeout(time: 20, unit: 'MINUTES') }
+      steps {
+        bat 'mvn -B -U clean test'
+      }
     }
 
     stage('Report') {
       steps {
-        // Surefire XMLs (works for TestNG when using maven-surefire-plugin)
+        // JUnit-style Surefire XMLs
         junit allowEmptyResults: true, testResults: '**/surefire-reports/*.xml'
 
-        // Native TestNG report if your build produces testng-results.xml
-        publishTestNG testResultsPattern: '**/test-output/testng-results.xml, **/surefire-reports/testng-results.xml',
-                      escapeTestDescp: true, escapeExceptionMsg: true
+        // Native TestNG results (matches your plugin’s snippet)
+        testNG reportFilenamePattern: '**/test-output/testng-results.xml, **/surefire-reports/testng-results.xml'
 
+        // Keep useful outputs
         archiveArtifacts artifacts: 'target/surefire-reports/**, test-output/**, screenshots/**',
                          allowEmptyArchive: true
       }
