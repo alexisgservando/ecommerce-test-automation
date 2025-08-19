@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN" monitorInterval="60">
+	<Properties>
+		<!-- change at runtime: -DLOG_LEVEL=debug  -DLOG_DIR=C:/temp/logs -->
+		<Property name="LOG_LEVEL">${sys:LOG_LEVEL:-info}</Property>
+		<Property name="LOG_DIR">${sys:LOG_DIR:-${sys:user.dir}/target/logs}</Property>
+		<Property name="PATTERN">%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level
+			%logger{36} - %msg%n</Property>
+	</Properties>
+
+	<Appenders>
+		<Console name="CONSOLE">
+			<PatternLayout pattern="${PATTERN}" />
+		</Console>
+
+		<RollingFile name="FILE"
+			fileName="${LOG_DIR}/automation.log"
+			filePattern="${LOG_DIR}/automation-%d{yyyy-MM-dd}-%i.log.gz">
+			<PatternLayout pattern="${PATTERN}" />
+			<Policies>
+				<SizeBasedTriggeringPolicy size="10 MB" />
+				<TimeBasedTriggeringPolicy />
+			</Policies>
+			<DefaultRolloverStrategy max="10" />
+		</RollingFile>
+	</Appenders>
+
+	<Loggers>
+		<!-- be chatty in our code, quiet elsewhere -->
+		<Logger name="tests" level="info" additivity="false">
+			<AppenderRef ref="CONSOLE" />
+			<AppenderRef ref="FILE" />
+		</Logger>
+		<Logger name="pages" level="info" additivity="false">
+			<AppenderRef ref="CONSOLE" />
+			<AppenderRef ref="FILE" />
+		</Logger>
+		<Logger name="utils" level="info" additivity="false">
+			<AppenderRef ref="CONSOLE" />
+			<AppenderRef ref="FILE" />
+		</Logger>
+
+		<Root level="${LOG_LEVEL}">
+			<AppenderRef ref="CONSOLE" />
+			<AppenderRef ref="FILE" />
+		</Root>
+	</Loggers>
+</Configuration>

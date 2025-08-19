@@ -6,56 +6,55 @@ import org.openqa.selenium.By;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import utils.WaitUtils;
 
 public class HomePage {
-	private WebDriver driver;
+    private static final Logger log = LoggerFactory.getLogger(HomePage.class);
+    private final WebDriver driver;
 
-	// 1. Constructor
-	public HomePage(WebDriver driver) {
-		this.driver = driver;
-	}
+    public HomePage(WebDriver driver) {
+        this.driver = driver;
+    }
 
-	// 2. Locators
-	private final String expectedTitle = "nopCommerce demo store";
-	private final By topMenuLinks = By.cssSelector("ul.top-menu.notmobile > li > a");
+    private final String expectedTitle = "nopCommerce demo store";
+    private final By topMenuLinks = By.cssSelector("ul.top-menu.notmobile > li > a");
 
-	// 3. Methods
-	public String getPageTitle() {
-		String title = driver.getTitle();
-		System.out.println("Current page title: '" + title + "'");
-		return title;
-	}
+    public String getPageTitle() {
+        String title = driver.getTitle();
+        log.info("Current page title: '{}'", title);
+        return title;
+    }
 
-	public String getExpectedTitle() {
-		return expectedTitle;
-	}
+    public String getExpectedTitle() {
+        return expectedTitle;
+    }
 
-	public boolean isTitleCorrect() {
-		String currentTitle = getPageTitle();
-		// Check if title contains expected text (more flexible than exact match)
-		return currentTitle != null && currentTitle.contains(expectedTitle);
-	}
+    public boolean isTitleCorrect() {
+        String t = getPageTitle();
+        boolean ok = t != null && t.contains(expectedTitle);
+        log.debug("Title contains expected? {}", ok);
+        return ok;
+    }
 
-	public List<String> getTopMenuCategories() {
-		try {
-			System.out.println("Current URL: " + driver.getCurrentUrl());
-			System.out.println("Page title before waiting: " + driver.getTitle());
-			
-			List<WebElement> elements = WaitUtils.waitForAllVisible(driver, topMenuLinks);
-			List<String> categoryTexts = new ArrayList<>();
-			System.out.println("Top Menu Categories Found:");
-			for (WebElement el : elements) {
-				String text = el.getText().trim();
-				categoryTexts.add(text);
-				System.out.println("- " + text);
-			}
-			return categoryTexts;
-		} catch (TimeoutException e) {
-			System.out.println("Timeout waiting for menu elements. Current title: " + driver.getTitle());
-			System.out.println("Current URL: " + driver.getCurrentUrl());
-			System.out.println("Page source preview: " + driver.getPageSource().substring(0, Math.min(500, driver.getPageSource().length())));
-			throw e;
-		}
-	}
+    public List<String> getTopMenuCategories() {
+        try {
+            log.debug("URL before reading menu: {}", driver.getCurrentUrl());
+            List<WebElement> els = WaitUtils.waitForAllVisible(driver, topMenuLinks);
+            List<String> out = new ArrayList<>();
+            for (WebElement el : els) {
+                String text = el.getText().trim();
+                out.add(text);
+                log.info("Top menu item: {}", text);
+            }
+            return out;
+        } catch (TimeoutException e) {
+            log.error("Timeout waiting for top menu. Title='{}' URL='{}'",
+                      driver.getTitle(), driver.getCurrentUrl());
+            int len = Math.min(500, driver.getPageSource().length());
+            log.debug("Page source preview: {}", driver.getPageSource().substring(0, len));
+            throw e;
+        }
+    }
 }

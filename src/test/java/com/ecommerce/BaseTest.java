@@ -1,115 +1,73 @@
 package com.ecommerce;
 
-import java.io.IOException;
-import java.time.Duration;
-import java.util.Map;
+import io.github.bonigarcia.wdm.WebDriverManager;
+import utils.ConfigReader;
 import org.openqa.selenium.Dimension;
-import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.support.ui.WebDriverWait;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 
-import io.github.bonigarcia.wdm.WebDriverManager;
-import utils.ConfigReader;
+import java.time.Duration;
 
 public class BaseTest {
-	protected WebDriver driver;
+    protected WebDriver driver;
+    private static final Logger log = LoggerFactory.getLogger(BaseTest.class);
 
-	@BeforeClass
-	public void setUp() throws IOException, InterruptedException {
-		WebDriverManager.chromedriver().setup();
+    @BeforeClass
+    public void setUp() {
+        log.info("Setting up WebDriver");
+        WebDriverManager.chromedriver().setup();
 
-		ChromeOptions options = new ChromeOptions();
+        ChromeOptions options = new ChromeOptions();
+        options.addArguments("--disable-blink-features=AutomationControlled",
+                             "--disable-extensions",
+                             "--disable-plugins");
+        // NOTE: If the site needs JS, do not disable it. Keep this off unless truly needed.
+        // options.addArguments("--disable-javascript");
 
-		// Stable defaults
-		options.addArguments("--disable-blink-features=AutomationControlled");
-		options.addArguments("--disable-extensions");
-		options.setExperimentalOption("excludeSwitches", new String[] { "enable-automation" });
-		options.setExperimentalOption("useAutomationExtension", false);
-		options.addArguments("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-				+ "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-		options.addArguments("--lang=en-US,en");
+        if (System.getenv("CI") != null) {
+            log.info("CI detected: running headless with CI-safe flags");
+            options.addArguments("--headless=new",
+                                 "--no-sandbox",
+                                 "--disable-dev-shm-usage",
+                                 "--remote-allow-origins=*",
+                                 "--window-size=1920,1080",
+                                 "--disable-gpu",
+                                 "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36");
+        } else {
+            log.info("Local run: headed browser");
+        }
 
-		// Detect CI (Jenkins, GitHub Actions, or generic CI)
-		Map<String, String> env = System.getenv();
-		boolean isCI = env.containsKey("JENKINS_URL") || "true".equalsIgnoreCase(env.get("GITHUB_ACTIONS"))
-				|| "true".equalsIgnoreCase(env.get("CI"));
+        driver = new ChromeDriver(options);
+        driver.manage().window().setSize(new Dimension(1920, 1080));
+        driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(30));
+        driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(10));
 
-		if (isCI) {
-			// Only use custom user data directory for GitHub Actions, not Jenkins
-			boolean isGitHubActions = "true".equalsIgnoreCase(env.get("GITHUB_ACTIONS"));
+        String url = ConfigReader.getBaseURL();
+        log.info("Navigating to {}", url);
+        driver.get(url);
 
-			if (isGitHubActions) {
-				String workspace = env.getOrDefault("WORKSPACE", System.getProperty("java.io.tmpdir"));
-				String tag = env.getOrDefault("BUILD_TAG",
-						env.getOrDefault("BUILD_NUMBER", java.util.UUID.randomUUID().toString()));
-				java.nio.file.Path profileDir = java.nio.file.Paths.get(workspace, "chrome-profile-" + tag);
-				java.nio.file.Files.createDirectories(profileDir);
-				System.out.println("Using CI Chrome profile: " + profileDir);
-				options.addArguments("--user-data-dir=" + profileDir.toString());
-			} else {
-				System.out.println("Jenkins detected - using default Chrome profile location");
-			}
+        // wait out any "Just a moment..." pages
+        try {
+            new WebDriverWait(driver, Duration.ofSeconds(30))
+                    .until(ExpectedConditions.not(ExpectedConditions.titleContains("Just a moment")));
+            log.info("Landing page title: {}", driver.getTitle());
+        } catch (Exception e) {
+            log.warn("Page load wait finished with warning: {}", e.getMessage());
+        }
+    }
 
-			options.addArguments("--no-first-run", "--no-default-browser-check");
-			options.addArguments("--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
-					"--remote-allow-origins=*", "--window-size=1920,1080", "--disable-gpu");
-		} else {
-			options.addArguments("--start-maximized");
-		}
-
-		driver = new ChromeDriver(options);
-		driver.manage().window().setSize(new Dimension(1920, 1080));
-		driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(isCI ? 60 : 30));
-		driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(10));
-
-		driver.get(ConfigReader.getBaseURL());
-
-		// Resilient wait for Cloudflare interstitial + DOM readiness
-		int waitSeconds = isCI ? 90 : 30;
-		WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(waitSeconds));
-		try {
-			// Wait until title is not "Just a moment..."
-			wait.until(d -> {
-				String title = driver.getTitle();
-				return title != null && !title.contains("Just a moment");
-			});
-
-			// Wait for document.readyState === "complete"
-			long end = System.currentTimeMillis() + (waitSeconds * 1000L);
-			while (System.currentTimeMillis() < end) {
-				String ready = (String) ((JavascriptExecutor) driver).executeScript("return document.readyState");
-				if ("complete".equals(ready))
-					break;
-				Thread.sleep(500);
-			}
-
-			// One gentle refresh if still not complete
-			String ready = (String) ((JavascriptExecutor) driver).executeScript("return document.readyState");
-			if (!"complete".equals(ready)) {
-				driver.navigate().refresh();
-				long end2 = System.currentTimeMillis() + 30_000L;
-				while (System.currentTimeMillis() < end2) {
-					ready = (String) ((JavascriptExecutor) driver).executeScript("return document.readyState");
-					if ("complete".equals(ready))
-						break;
-					Thread.sleep(500);
-				}
-			}
-
-			Thread.sleep(1000); // small settle time
-		} catch (Exception e) {
-			System.out.println("Page load warning: " + e.getMessage());
-		}
-	}
-
-	@AfterClass(alwaysRun = true)
-	public void tearDown() {
-		if (driver != null) {
-			driver.quit();
-		}
-	}
+    @AfterClass(alwaysRun = true)
+    public void tearDown() {
+        if (driver != null) {
+            log.info("Quitting WebDriver");
+            driver.quit();
+        }
+    }
 }

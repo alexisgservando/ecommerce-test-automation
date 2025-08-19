@@ -1,8 +1,67 @@
+# -------------------------
+# Java / Maven / TestNG Project
+# -------------------------
+
+# Compiled class files
+*.class
+
+# Log files
+*.log
+
+# BlueJ / Java-specific
+*.ctxt
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files
+*.jar
+*.war
+*.ear
+
+# IDE-specific files
+# Eclipse
 .classpath
 .project
 .settings/
-*.class
-*.log
-*.exe
-test-output/
+.metadata/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+
+# VS Code
+.vscode/
+
+# MacOS system files
+.DS_Store
+
+# Windows system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Maven target directory
 target/
+
+# Test output (TestNG, Surefire, ExtentReports, etc.)
+test-output/
+surefire-reports/
+reports/
+
+# Logs and temporary files
+*.tmp
+*.swp
+*.bak
+
+# Environment files
+.env
+*.properties.local
+
+# -------------------------
+# Custom project ignores
+# -------------------------
+
+# Logs and configs
+*.exe
